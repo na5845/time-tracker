@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מערכת ניהול שעות</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div id="authScreen" class="screen active-screen">
+        <div class="card">
+            <h2 id="authTitle">התחברות למערכת</h2>
+            <input type="email" id="email" placeholder="אימייל">
+            <input type="password" id="password" placeholder="סיסמה">
+            <button id="authMainBtn" class="main-btn btn-primary" onclick="handleAuth()">כניסה</button>
+            <p id="authError" style="color: var(--danger); font-size: 0.9rem;"></p>
+            <div style="margin-top:15px; font-size:0.9rem;">
+                <span id="authModeText">אין לך חשבון?</span>
+                <a onclick="toggleAuthMode()" id="authToggleBtn" style="color:var(--primary); cursor:pointer; text-decoration:underline;">הירשם כאן</a>
+            </div>
+        </div>
+    </div>
+
+    <div id="onboardingScreen" class="screen">
+        <div class="card">
+            <h2>ברוכים הבאים! 👋</h2>
+            <p style="color:var(--text-muted); margin-bottom:20px;">נא להשלים פרטים אישיים:</p>
+            <label>שם מלא:</label> <input type="text" id="onboardName">
+            <label>טלפון:</label> <input type="tel" id="onboardPhone">
+            <label>ת"ז:</label> <input type="text" id="onboardID">
+            <input type="hidden" id="selectedMode" value="solo">
+            <button class="main-btn btn-primary" onclick="saveOnboarding()">שמור והתחל</button>
+        </div>
+    </div>
+
+    <div id="homeScreen" class="screen">
+        <div class="card">
+            <div class="header-info">
+                <span id="userDisplayHome">שלום!</span>
+                <div class="header-actions">
+                    <button class="theme-toggle" onclick="toggleTheme()">◑</button>
+                    <span onclick="logout()" class="logout-btn">יציאה</span>
+                </div>
+            </div>
+            <h2>תפריט ראשי</h2>
+            <div class="menu-grid">
+                <div class="menu-card" onclick="showScreen('timerScreen')">
+                    <span class="menu-icon">⏱️</span><span class="menu-title">שעון נוכחות</span>
+                </div>
+                <div class="menu-card" onclick="showScreen('tasksScreen')">
+                    <span class="menu-icon">✅</span><span class="menu-title">משימות</span>
+                </div>
+            </div>
+            <div style="margin-top:30px;">
+                <button class="tool-btn" style="width:100%" onclick="openModal('manageModal')">➕ הוספת לקוחות ופרויקטים</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="timerScreen" class="screen">
+        <div class="card">
+            <button class="btn-back" onclick="showScreen('homeScreen')">➜</button>
+            <h2>שעון עבודה</h2>
+            <div class="timer" id="timerDisplay">00:00:00</div>
+            <select id="clientSelect" onchange="loadProjects('timer')"><option value="">-- בחר לקוח --</option></select>
+            <select id="projectSelect" disabled><option value="">-- קודם בחר לקוח --</option></select>
+            <input type="text" id="taskDescription" placeholder="הערה (מה עושים?)...">
+            <button id="actionBtn" class="main-btn btn-start" onclick="toggleTimer()" disabled>התחל לעבוד</button>
+            <div class="tools-grid">
+                <button class="tool-btn" onclick="initHistoryModal()">📋 היסטוריה ודוחות</button>
+                <button class="tool-btn" onclick="openModal('manageModal')">➕ ניהול</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="tasksScreen" class="screen">
+        <div class="card">
+            <button class="btn-back" onclick="showScreen('homeScreen')">➜</button>
+            <h2>משימות לביצוע</h2>
+            <div class="task-tabs">
+                <button class="task-tab active" onclick="switchTaskTab('todo')">לביצוע</button>
+                <button class="task-tab" onclick="switchTaskTab('done')">היסטוריה</button>
+            </div>
+            <button class="task-add-btn" onclick="toggleTaskInput()">➕ משימה חדשה</button>
+            <div id="taskInputArea" class="task-input-area">
+                <div class="row-inputs">
+                    <select id="taskClientSelect" onchange="loadProjects('task')"><option value="">-- לקוח כללי --</option></select>
+                    <select id="taskProjectSelect" disabled><option value="">-- פרויקט --</option></select>
+                </div>
+                <input type="text" id="newTaskTitle" placeholder="מה המשימה?">
+                <div class="row-inputs">
+                    <input type="date" id="newTaskDate">
+                    <button class="btn-primary" style="width:100px; border-radius:8px; border:none;" onclick="addTask()">שמור</button>
+                </div>
+            </div>
+            <div id="tasksList" style="max-height:400px; overflow-y:auto;"></div>
+        </div>
+    </div>
+
+    <div id="profileModal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="close-modal" onclick="closeModal('profileModal')">&times;</button>
+            <h3>הפרופיל שלי</h3>
+            <label>אימייל:</label><input type="text" id="editProfileEmail" disabled>
+            <label>שם מלא:</label><input type="text" id="editProfileName">
+            <label>טלפון:</label><input type="tel" id="editProfilePhone">
+            <label>תעודת זהות:</label><input type="text" id="editProfileID">
+            <button class="btn-action" onclick="saveProfileChanges()">שמור שינויים</button>
+            <button class="btn-delete-account-small" onclick="deleteAccount()">🗑 מחיקת חשבון</button>
+        </div>
+    </div>
+
+    <div id="manageModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 400px;">
+            <button class="close-modal" onclick="closeModal('manageModal')">&times;</button>
+            <div class="tab-header">
+                <button class="tab-btn active" onclick="switchTab('client')">לקוח חדש</button>
+                <button class="tab-btn" onclick="switchTab('project')">פרויקט חדש</button>
+            </div>
+            <div id="tab-client" class="tab-content active">
+                <label>שם לקוח:</label><input type="text" id="newClientName">
+                <button class="btn-action" onclick="addNewClient()">שמור לקוח</button>
+            </div>
+            <div id="tab-project" class="tab-content">
+                <label>בחר לקוח:</label><select id="modalClientSelect"></select>
+                <label>שם פרויקט:</label><input type="text" id="newProjectName">
+                <div class="row-inputs">
+                    <input type="number" id="newProjectRate" placeholder="תעריף">
+                    <select id="newProjectCurrency"><option>₪</option><option>$</option></select>
+                </div>
+                <button class="btn-action" onclick="addNewProject()">שמור פרויקט</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="historyModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 950px;">
+            <button class="close-modal" onclick="closeModal('historyModal')">&times;</button>
+            <h3 id="historyTitle">היסטוריה</h3>
+            <div class="filter-container">
+                <div class="filter-row-inputs">
+                    <div class="filter-group"><label>לקוח:</label><select id="historyClientSelect" onchange="loadProjects('history')"><option value="">-- הכל --</option></select></div>
+                    <div class="filter-group"><label>פרויקט:</label><select id="historyProjectSelect" disabled><option value="">-- הכל --</option></select></div>
+                    <div class="filter-group"><label>מ:</label><input type="date" id="historyStart"></div>
+                    <div class="filter-group"><label>עד:</label><input type="date" id="historyEnd"></div>
+                </div>
+                <div class="filter-row-buttons">
+                    <button class="btn-filter-date" onclick="setHistoryRange('current')">חודש נוכחי</button>
+                    <button class="btn-filter-date" onclick="setHistoryRange('prev')">חודש שעבר</button>
+                    <button class="btn-filter-go" onclick="loadHistoryData()">🔎 סנן</button>
+                    <button class="btn-export-csv" onclick="exportData()">📥 יצוא CSV</button>
+                </div>
+            </div>
+            <table id="historyTable">
+                <thead><tr><th>תאריך</th><th>התחלה</th><th>סיום</th><th>לקוח</th><th>פרויקט</th><th>הערה</th><th>משך</th><th>עלות</th><th></th></tr></thead>
+                <tbody id="historyBody"></tbody>
+            </table>
+            <div id="totalSum" style="text-align:center;margin-top:15px;font-weight:bold;color:var(--primary); font-size:1.2rem;"></div>
+        </div>
+    </div>
+
+    <div id="editLogModal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="close-modal" onclick="closeModal('editLogModal')">&times;</button>
+            <h3>עריכת דיווח</h3>
+            <input type="hidden" id="editLogId">
+            <label>התחלה:</label><input type="datetime-local" id="editLogStart">
+            <label>סיום:</label><input type="datetime-local" id="editLogEnd">
+            <label>הערה:</label><textarea id="editLogDesc" rows="3"></textarea>
+            <button class="btn-action" onclick="saveLogEdit()">שמור</button>
+            <button class="btn-delete-log" onclick="deleteLog()">🗑 מחק רשומה</button>
+        </div>
+    </div>
+    
+    <div id="editTaskModal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="close-modal" onclick="closeModal('editTaskModal')">&times;</button>
+            <h3>עריכת משימה</h3>
+            <input type="hidden" id="editTaskId">
+            <label>כותרת:</label><input type="text" id="editTaskTitle">
+            <label>תאריך יעד:</label><input type="date" id="editTaskDate">
+            <button class="btn-action" onclick="saveTaskEdit()">שמור</button>
+            <button class="btn-delete-log" onclick="deleteTaskFromModal()">🗑 מחק משימה</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
