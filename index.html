@@ -4,15 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>מערכת ניהול שעות</title>
+    
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="style.css">
+    
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
     <div id="authScreen" class="screen active-screen">
         <div class="card">
-            <h2 id="authTitle">התחברות למערכת</h2>
+            <h2>התחברות למערכת</h2>
             <input type="email" id="email" placeholder="אימייל">
             <input type="password" id="password" placeholder="סיסמה">
             <button id="authMainBtn" class="main-btn btn-primary" onclick="handleAuth()">כניסה</button>
@@ -140,16 +143,14 @@
         <div class="modal-content" style="max-width: 950px;">
             <button class="close-modal" onclick="closeModal('historyModal')">&times;</button>
             <h3 id="historyTitle">היסטוריה</h3>
-            <div class="filter-container">
-                <div class="filter-row-inputs">
-                    <div class="filter-group"><label>לקוח:</label><select id="historyClientSelect" onchange="loadProjects('history')"><option value="">-- הכל --</option></select></div>
-                    <div class="filter-group"><label>פרויקט:</label><select id="historyProjectSelect" disabled><option value="">-- הכל --</option></select></div>
-                    <div class="filter-group"><label>מ:</label><input type="date" id="historyStart"></div>
-                    <div class="filter-group"><label>עד:</label><input type="date" id="historyEnd"></div>
-                </div>
-                <div class="filter-row-buttons">
-                    <button class="btn-filter-date" onclick="setHistoryRange('current')">חודש נוכחי</button>
-                    <button class="btn-filter-date" onclick="setHistoryRange('prev')">חודש שעבר</button>
+            <div class="filter-bar">
+                <div class="filter-group"><label>לקוח:</label><select id="historyClientSelect" onchange="loadProjects('history')"><option value="">-- הכל --</option></select></div>
+                <div class="filter-group"><label>פרויקט:</label><select id="historyProjectSelect" disabled><option value="">-- הכל --</option></select></div>
+                <div class="filter-group"><label>מ:</label><input type="date" id="historyStart"></div>
+                <div class="filter-group"><label>עד:</label><input type="date" id="historyEnd"></div>
+                <div class="filter-buttons">
+                    <button class="btn-filter-date" onclick="setHistoryRange('current')">נוכחי</button>
+                    <button class="btn-filter-date" onclick="setHistoryRange('prev')">שעבר</button>
                     <button class="btn-filter-go" onclick="loadHistoryData()">🔎 סנן</button>
                     <button class="btn-export-csv" onclick="exportData()">📥 יצוא CSV</button>
                 </div>
