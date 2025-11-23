@@ -1,4 +1,4 @@
-:root {
+root {
     --bg-color: #121212; --card-bg: #1e1e1e; --text-main: #e0e0e0; --text-muted: #a0a0a0;
     --input-bg: #2c2c2c; --border: #333; --primary: #bb86fc; --danger: #cf6679; --success: #03dac6;
 }
@@ -88,3 +88,4 @@ th { color: var(--primary); white-space: nowrap; font-size: 0.8rem; background: 
 .filter-group { flex: 1; min-width: 120px; }
 .filter-buttons { display: flex; gap: 5px; flex: 1.5; justify-content: flex-end; margin-top: 10px;}
 .btn-filter-date { background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 0 15px; border-radius: 8px; font-size: 0.8rem; height: 38px;
+
