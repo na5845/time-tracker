@@ -1,284 +1,108 @@
-const SUPABASE_URL = 'https://dotrhurfkkgnfxqxtndi.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvdHJodXJma2tnbmZ4cXh0bmRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM3MTU5MjQsImV4cCI6MjA3OTI5MTkyNH0.4RHUPUoEzXg5jlepgrnd4hmsiwP6FKyFaysvPd3WCXY';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-let currentUser = null, currentWorkspaceId = null, activeLogId = null, timerInterval = null, startTime = null, isLoginMode = true;
-let currentTaskFilter = 'todo';
-
-function showScreen(screenId) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active-screen'));
-    document.getElementById(screenId).classList.add('active-screen');
-    if(screenId === 'tasksScreen') { loadClients('task'); loadTasks(); }
-    if(screenId === 'timerScreen') { loadClients('timer'); }
+:root {
+    --bg-color: #121212; --card-bg: #1e1e1e; --text-main: #e0e0e0; --text-muted: #a0a0a0;
+    --input-bg: #2c2c2c; --border: #333; --primary: #bb86fc; --danger: #cf6679; --success: #03dac6;
 }
-
-function switchTab(tabName) {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    if(tabName === 'client') {
-        document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
-        document.getElementById('tab-client').classList.add('active');
-    } else {
-        document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
-        document.getElementById('tab-project').classList.add('active');
-    }
+body.light-mode {
+    --bg-color: #f0f2f5; --card-bg: #ffffff; --text-main: #333333; --text-muted: #666666;
+    --input-bg: #f9f9f9; --border: #e1e4e8; --primary: #6200ee;
 }
-
-function switchTaskTab(tabName) {
-    currentTaskFilter = tabName;
-    document.querySelectorAll('.task-tab').forEach(b => b.classList.remove('active'));
-    if(tabName === 'todo') document.querySelector('.task-tab:nth-child(1)').classList.add('active');
-    else document.querySelector('.task-tab:nth-child(2)').classList.add('active');
-    loadTasks();
+body {
+    font-family: 'Rubik', sans-serif; background-color: var(--bg-color); color: var(--text-main);
+    margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; transition: 0.3s;
 }
-
-async function checkAuth() {
-    try {
-        const { data: { session } } = await sb.auth.getSession();
-        if (session) {
-            currentUser = session.user;
-            const { data: profile } = await sb.from('profiles').select('*').eq('id', currentUser.id).single();
-            if (!profile) { showScreen('onboardingScreen'); return; }
-
-            window.currentProfile = profile;
-            document.getElementById('userDisplayHome').innerHTML = "שלום, " + (profile.full_name || "משתמש") + ` <span onclick="openEditProfile()" class="edit-icon">✏️</span>`;
-            
-            const { data: members } = await sb.from('workspace_members').select('workspace_id').eq('user_id', currentUser.id).limit(1);
-            if (members && members.length > 0) {
-                currentWorkspaceId = members[0].workspace_id;
-            } else {
-                const { data: ws } = await sb.from('workspaces').insert([{ name: 'הארגון שלי' }]).select().single();
-                await sb.from('workspace_members').insert([{ workspace_id: ws.id, user_id: currentUser.id, role: 'admin' }]);
-                currentWorkspaceId = ws.id;
-            }
-            showScreen('homeScreen');
-            checkActiveSession();
-            loadClients('modal');
-        } else {
-            showScreen('authScreen');
-        }
-    } catch (err) { console.error(err); showScreen('authScreen'); }
+.screen { display: none; width: 100%; max-width: 600px; padding: 20px; }
+.active-screen { display: block; }
+.card {
+    background: var(--card-bg); padding: 2rem; border-radius: 24px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2); border: 1px solid var(--border);
+    text-align: center; position: relative;
 }
-
-async function handleAuth() {
-    const email = document.getElementById('email').value, password = document.getElementById('password').value;
-    const btn = document.getElementById('authMainBtn');
-    if (!email || !password) return alert("מלא פרטים");
-    btn.disabled = true; btn.innerText = "טוען...";
-    let error;
-    if (isLoginMode) {
-        const res = await sb.auth.signInWithPassword({ email, password });
-        error = res.error; if (!error) { checkAuth(); return; }
-    } else {
-        const res = await sb.auth.signUp({ email, password });
-        error = res.error; if (!error) alert("נרשמת בהצלחה!");
-    }
-    if (error) { document.getElementById('authError').innerText = error.message; btn.disabled = false; btn.innerText = isLoginMode ? "כניסה" : "הרשמה"; }
+h2 { margin-top: 0; font-weight: 700; margin-bottom: 10px; }
+label { display: block; text-align: right; margin-bottom: 5px; color: var(--text-muted); font-size: 0.85rem; }
+select, input, textarea {
+    width: 100%; padding: 12px; margin-bottom: 15px; font-size: 16px; border-radius: 12px;
+    background-color: var(--input-bg); border: 1px solid var(--border); color: var(--text-main);
+    box-sizing: border-box; outline: none; font-family: 'Rubik', sans-serif;
 }
-
-function toggleAuthMode() {
-    isLoginMode = !isLoginMode;
-    document.getElementById('authTitle').innerText = isLoginMode ? "התחברות" : "הרשמה";
-    document.getElementById('authMainBtn').innerText = isLoginMode ? "כניסה" : "הרשמה";
-    document.getElementById('authModeText').innerText = isLoginMode ? "אין לך חשבון?" : "כבר רשום?";
-    document.getElementById('authToggleBtn').innerText = isLoginMode ? "הירשם כאן" : "התחבר כאן";
+input:disabled { opacity: 0.6; cursor: not-allowed; border: 1px dashed var(--border); background: transparent; }
+button { cursor: pointer; font-family: 'Rubik', sans-serif; }
+.main-btn {
+    width: 100%; padding: 14px; font-size: 18px; border-radius: 50px;
+    font-weight: bold; border: none; margin-bottom: 10px; transition: 0.2s;
 }
-
-async function logout() { await sb.auth.signOut(); localStorage.clear(); window.location.reload(); }
-
-async function loadClients(context) {
-    const { data } = await sb.from('clients').select('*').eq('workspace_id', currentWorkspaceId).order('name');
-    let selectId = '';
-    if(context === 'timer') selectId = 'clientSelect';
-    else if(context === 'task') selectId = 'taskClientSelect';
-    else if(context === 'modal') selectId = 'modalClientSelect';
-    else if(context === 'history') selectId = 'historyClientSelect';
-    const sel = document.getElementById(selectId); if(!sel) return;
-    const defaultText = context === 'history' ? '-- הכל --' : '-- בחר לקוח --';
-    sel.innerHTML = `<option value="">${defaultText}</option>`;
-    data?.forEach(c => sel.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-start { background: #03dac6; color: #000; }
+.btn-stop { background: #cf6679; color: white; }
+.menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 30px; }
+.menu-card {
+    background: var(--input-bg); border: 1px solid var(--border); border-radius: 20px;
+    padding: 30px 20px; cursor: pointer; transition: 0.3s;
+    display: flex; flex-direction: column; align-items: center; gap: 15px;
 }
-
-async function loadProjects(context) {
-    let cIdStr = context === 'timer' ? 'clientSelect' : (context === 'task' ? 'taskClientSelect' : 'historyClientSelect');
-    let pIdStr = context === 'timer' ? 'projectSelect' : (context === 'task' ? 'taskProjectSelect' : 'historyProjectSelect');
-    const cid = document.getElementById(cIdStr).value;
-    const pSel = document.getElementById(pIdStr);
-    pSel.innerHTML = `<option value="">${context==='history'?'-- הכל --':'-- טוען... --'}</option>`;
-    pSel.disabled = true;
-    if(!cid) { if(context === 'history') loadHistoryData(); return; }
-    const { data } = await sb.from('projects').select('*').eq('client_id', cid).order('name');
-    pSel.innerHTML = `<option value="">${context==='history'?'-- כל הפרויקטים --':'-- בחר פרויקט --'}</option>`;
-    if(data.length > 0) { data.forEach(p => pSel.innerHTML += `<option value="${p.id}">${p.name}</option>`); pSel.disabled = false; }
-    else pSel.innerHTML = '<option value="">אין פרויקטים</option>';
-    if(context === 'history') loadHistoryData();
-    if(context === 'timer' && !activeLogId) document.getElementById('actionBtn').disabled = false;
+.menu-card:hover { transform: translateY(-5px); border-color: var(--primary); background: rgba(187,134,252,0.05); }
+.menu-icon { font-size: 3rem; }
+.menu-title { font-weight: bold; font-size: 1.2rem; color: var(--text-main); }
+.tools-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 20px; }
+.tool-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--text-muted);
+    padding: 10px; border-radius: 12px; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 5px;
 }
-
-async function addNewClient() {
-    const name = document.getElementById('newClientName').value;
-    if (!name) return;
-    await sb.from('clients').insert([{ workspace_id: currentWorkspaceId, name: name }]);
-    document.getElementById('newClientName').value = ""; alert("לקוח נוסף");
-    loadClients('timer'); loadClients('task'); loadClients('modal');
-}
-
-async function addNewProject() {
-    const cid = document.getElementById('modalClientSelect').value, name = document.getElementById('newProjectName').value, rate = document.getElementById('newProjectRate').value, curr = document.getElementById('newProjectCurrency').value;
-    if (!cid || !name) return alert("חסרים פרטים");
-    await sb.from('projects').insert([{ workspace_id: currentWorkspaceId, client_id: cid, name: name, hourly_rate: rate, currency: curr }]);
-    document.getElementById('newProjectName').value = ""; alert("פרויקט נוסף");
-}
-
-async function checkActiveSession() {
-    const { data } = await sb.from('time_logs').select('*').is('end_time', null).limit(1);
-    if (data && data.length > 0) { activeLogId = data[0].id; startTime = new Date(data[0].start_time); setWorkingState(true); startClockTick(); showScreen('timerScreen'); }
-}
-async function toggleTimer() {
-    const btn = document.getElementById('actionBtn'), pid = document.getElementById('projectSelect').value, desc = document.getElementById('taskDescription').value;
-    if (!activeLogId) {
-        if (!pid) return alert("בחר פרויקט"); btn.disabled = true;
-        const { data, error } = await sb.from('time_logs').insert([{ user_id: currentUser.id, project_id: pid, start_time: new Date(), description: desc }]).select();
-        if (!error) { activeLogId = data[0].id; startTime = new Date(); setWorkingState(true); startClockTick(); document.getElementById('taskDescription').value = ""; } else btn.disabled = false;
-    } else {
-        btn.disabled = true; const { error } = await sb.from('time_logs').update({ end_time: new Date() }).eq('id', activeLogId);
-        if (!error) { activeLogId = null; setWorkingState(false); stopClockTick(); } else btn.disabled = false;
-    }
-}
-function setWorkingState(isWorking) {
-    const btn = document.getElementById('actionBtn');
-    if (isWorking) { btn.innerText = "⏹ סיום עבודה"; btn.className = "main-btn btn-stop"; btn.disabled = false; } 
-    else { btn.innerText = "▶ התחל לעבוד"; btn.className = "main-btn btn-start"; btn.disabled = false; document.getElementById('timerDisplay').innerText = "00:00:00"; }
-}
-function startClockTick() {
-    if (timerInterval) clearInterval(timerInterval);
-    timerInterval = setInterval(() => { const diff = new Date() - startTime; const h = Math.floor(diff / 3600000), m = Math.floor((diff % 3600000) / 60000), s = Math.floor((diff % 60000) / 1000); document.getElementById('timerDisplay').innerText = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`; }, 1000);
-}
-function stopClockTick() { if (timerInterval) clearInterval(timerInterval); }
-
-function initHistoryModal() { setHistoryRange('current'); loadClients('history'); openModal('historyModal'); }
-function setHistoryRange(type) {
-    const now = new Date(); let start, end;
-    if (type === 'current') { start = new Date(now.getFullYear(), now.getMonth(), 1); end = new Date(now.getFullYear(), now.getMonth() + 1, 0); } 
-    else { start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0); }
-    start.setMinutes(start.getMinutes() - start.getTimezoneOffset()); end.setMinutes(end.getMinutes() - end.getTimezoneOffset());
-    document.getElementById('historyStart').valueAsDate = start; document.getElementById('historyEnd').valueAsDate = end;
-    loadHistoryData();
-}
-async function loadHistoryData() {
-    const start = document.getElementById('historyStart').value, end = document.getElementById('historyEnd').value;
-    const cid = document.getElementById('historyClientSelect').value, pid = document.getElementById('historyProjectSelect').value;
-    const tbody = document.getElementById('historyBody');
-    if (!start || !end) return;
-    tbody.innerHTML = "<tr><td colspan='9' style='text-align:center'>טוען...</td></tr>";
-    const endDt = new Date(end); endDt.setHours(23,59,59);
-    let query = sb.from('time_logs').select('*, projects!inner(name, hourly_rate, currency, client_id, clients(name))').gte('start_time', start).lte('start_time', endDt.toISOString()).order('start_time', { ascending: false });
-    if (pid) query = query.eq('project_id', pid); else if (cid) query = query.eq('projects.client_id', cid);
-    const { data, error } = await query;
-    if (error || !data.length) { tbody.innerHTML = "<tr><td colspan='9' style='text-align:center'>אין נתונים</td></tr>"; document.getElementById('totalSum').innerText = ""; return; }
-    tbody.innerHTML = ""; let totalMs = 0, totalCost = 0, currencySym = "";
-    data.forEach(r => {
-        const s = new Date(r.start_time), e = r.end_time ? new Date(r.end_time) : null;
-        let dur = "-", cost = "-"; const curr = r.projects?.currency || ""; if (curr) currencySym = curr;
-        if (e) {
-            const diff = e - s; totalMs += diff;
-            const h = Math.floor(diff / 3600000), m = Math.floor((diff % 3600000) / 60000); let sc = Math.floor((diff % 60000) / 1000);
-            if (diff > 0 && h===0 && m===0 && sc===0) sc = 1;
-            dur = `${h}:${m.toString().padStart(2,'0')}:${sc.toString().padStart(2,'0')}`;
-            const cVal = (diff / 3600000) * (r.projects.hourly_rate || 0); totalCost += cVal; cost = cVal.toFixed(2) + curr;
-        }
-        const fullDesc = (r.description || "").replace(/'/g, "\\'");
-        const shortDesc = r.description ? (r.description.length > 20 ? r.description.substring(0,20)+"..." : r.description) : "-";
-        tbody.innerHTML += `<tr><td>${s.toLocaleDateString()}</td><td>${s.toLocaleTimeString()}</td><td>${e ? e.toLocaleTimeString() : ""}</td><td>${r.projects.clients.name}</td><td>${r.projects.name}</td><td title="${fullDesc}">${shortDesc}</td><td style="direction:ltr">${dur}</td><td style="direction:ltr">${cost}</td><td><button class="btn-icon btn-edit" onclick="openEditLog('${r.id}','${r.start_time}','${r.end_time}','${fullDesc}')">✏️</button></td></tr>`;
-    });
-    const th = Math.floor(totalMs / 3600000), tm = Math.floor((totalMs % 3600000) / 60000), ts = Math.floor((totalMs % 60000) / 1000);
-    let summary = `סה"כ שעות: ${th}:${tm.toString().padStart(2,'0')}:${ts.toString().padStart(2,'0')}`;
-    if (pid || cid) summary += ` (עלות: ${totalCost.toFixed(2)}${currencySym})`;
-    document.getElementById('totalSum').innerText = summary;
-}
-async function exportData() {
-    const start = document.getElementById('historyStart').value, end = document.getElementById('historyEnd').value;
-    const cid = document.getElementById('historyClientSelect').value, pid = document.getElementById('historyProjectSelect').value;
-    if (!start || !end) return alert("בחר תאריכים");
-    const endDt = new Date(end); endDt.setHours(23,59,59);
-    let query = sb.from('time_logs').select('*, projects!inner(name, hourly_rate, currency, client_id, clients(name))').gte('start_time', start).lte('start_time', endDt.toISOString()).order('start_time');
-    if (pid) query = query.eq('project_id', pid); else if (cid) query = query.eq('projects.client_id', cid);
-    const { data } = await query;
-    if (!data || !data.length) return alert("אין נתונים ליצוא");
-    let csv = "\uFEFFתאריך,לקוח,פרויקט,הערה,התחלה,סיום,משך זמן,שעות עשרוניות,תעריף,סה\"כ לתשלום\n";
-    data.forEach(r => {
-        const d = new Date(r.start_time), dateStr = d.toLocaleDateString('he-IL'), client = r.projects.clients.name, project = r.projects.name, startStr = d.toLocaleTimeString();
-        let endStr = "", durStr = "0:00:00", decHours = 0, cost = 0;
-        if (r.end_time) {
-            const e = new Date(r.end_time); endStr = e.toLocaleTimeString();
-            const diff = e - d; decHours = diff / 3600000; cost = decHours * (r.projects.hourly_rate || 0);
-            const h = Math.floor(diff / 3600000), m = Math.floor((diff % 3600000) / 60000); let s = Math.floor((diff % 60000) / 1000);
-            if (diff > 0 && h===0 && m===0 && s===0) s=1;
-            durStr = `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
-        }
-        const desc = (r.description || "").replace(/"/g, '""'), curr = r.projects.currency || "";
-        csv += `${dateStr},"${client}","${project}","${desc}",${startStr},${endStr},${durStr},${decHours.toFixed(4)},${r.projects.hourly_rate}${curr},${cost.toFixed(2)}${curr}\n`;
-    });
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob);
-    const link = document.createElement("a"); link.href = url; link.download = `export_${start}_to_${end}.csv`; document.body.appendChild(link); link.click(); document.body.removeChild(link);
-}
-
-// --- Tasks ---
-function toggleTaskInput() { document.getElementById('taskInputArea').classList.toggle('open'); }
-async function loadTasks() {
-    const div = document.getElementById('tasksList'); div.innerHTML = "טוען...";
-    const isCompleted = currentTaskFilter === 'done';
-    const { data } = await sb.from('tasks').select('*, projects(name), clients(name)').eq('user_id', currentUser.id).eq('is_completed', isCompleted).order('created_at', { ascending: false });
-    div.innerHTML = "";
-    if (!data || !data.length) { div.innerHTML = "<div style='text-align:center; opacity:0.5; margin-top:20px'>אין משימות</div>"; return; }
-    data.forEach(t => {
-        const checked = t.is_completed ? 'checked' : '';
-        const style = t.is_completed ? 'text-decoration:line-through; opacity:0.6' : '';
-        let tags = "";
-        if (t.clients) tags += `<span class="task-tag">${t.clients.name}</span>`;
-        if (t.projects) tags += `<span class="task-tag" style="background:#666">${t.projects.name}</span>`;
-        div.innerHTML += `
-        <div class="task-item">
-            <div class="task-left">
-                <input type="checkbox" class="task-checkbox" onchange="toggleTask('${t.id}', this.checked)" ${checked}>
-                <div style="${style}">
-                    <span class="task-title">${t.title}</span>
-                    <div class="task-meta">${tags} ${t.due_date || ''}</div>
-                </div>
-            </div>
-            <div class="task-right">
-                ${!t.is_completed ? `<button class="btn-icon btn-play" onclick="startTaskFromItem('${t.title.replace(/'/g,"\\'")}', '${t.project_id}')">▶</button>` : ''}
-                <button class="btn-icon btn-edit" onclick="openEditTask('${t.id}', '${t.title.replace(/'/g, "\\'")}', '${t.due_date||''}')">✏️</button>
-            </div>
-        </div>`;
-    });
-}
-async function addTask() {
-    const title = document.getElementById('newTaskTitle').value, date = document.getElementById('newTaskDate').value;
-    const cid = document.getElementById('taskClientSelect').value || null, pid = document.getElementById('taskProjectSelect').value || null;
-    if (!title) return alert("חובה להזין שם משימה");
-    await sb.from('tasks').insert([{ user_id: currentUser.id, title: title, due_date: date || null, client_id: cid, project_id: pid }]);
-    document.getElementById('newTaskTitle').value = ""; toggleTaskInput(); loadTasks();
-}
-async function toggleTask(id, status) { await sb.from('tasks').update({ is_completed: status }).eq('id', id); loadTasks(); }
-function openEditTask(id, title, date) { document.getElementById('editTaskId').value = id; document.getElementById('editTaskTitle').value = title; document.getElementById('editTaskDate').value = date; openModal('editTaskModal'); }
-async function saveTaskEdit() { const id = document.getElementById('editTaskId').value, title = document.getElementById('editTaskTitle').value, date = document.getElementById('editTaskDate').value; await sb.from('tasks').update({ title: title, due_date: date || null }).eq('id', id); closeModal('editTaskModal'); loadTasks(); }
-async function deleteTaskFromModal() { if(!confirm("למחוק?")) return; await sb.from('tasks').delete().eq('id', document.getElementById('editTaskId').value); closeModal('editTaskModal'); loadTasks(); }
-async function startTaskFromItem(title, pid) {
-    if (!pid || pid === 'null') return alert("המשימה אינה משויכת לפרויקט, אי אפשר למדוד זמן");
-    showScreen('timerScreen'); document.getElementById('taskDescription').value = title;
-    if (!activeLogId) { const { data, error } = await sb.from('time_logs').insert([{ user_id: currentUser.id, project_id: pid, start_time: new Date(), description: title }]).select(); if (!error) { activeLogId = data[0].id; startTime = new Date(); setWorkingState(true); startClockTick(); } }
-}
-
-function openEditLog(id, s, e, d) { document.getElementById('editLogId').value=id; document.getElementById('editLogStart').value=toLocalISO(new Date(s)); document.getElementById('editLogEnd').value=e&&e!=='null'?toLocalISO(new Date(e)):""; document.getElementById('editLogDesc').value=d; openModal('editLogModal'); }
-function toLocalISO(d) { const o=d.getTimezoneOffset()*60000; return new Date(d-o).toISOString().slice(0,16); }
-async function saveLogEdit() { const id=document.getElementById('editLogId').value, start=document.getElementById('editLogStart').value, end=document.getElementById('editLogEnd').value, desc=document.getElementById('editLogDesc').value; await sb.from('time_logs').update({start_time:new Date(start).toISOString(), end_time:end?new Date(end).toISOString():null, description:desc}).eq('id',id); closeModal('editLogModal'); loadHistoryData(); }
-async function deleteLog() { if(confirm("בטוח?")){ await sb.from('time_logs').delete().eq('id',document.getElementById('editLogId').value); closeModal('editLogModal'); loadHistoryData(); } }
-
-function openModal(id) { document.getElementById(id).style.display = 'flex'; }
-function closeModal(id) { document.getElementById(id).style.display = 'none'; }
-function toggleTheme() { document.body.classList.toggle('light-mode'); }
-function openEditProfile() { const p=window.currentProfile; document.getElementById('editProfileEmail').value = p.email; document.getElementById('editProfileName').value = p.full_name; document.getElementById('editProfilePhone').value = p.phone||""; document.getElementById('editProfileID').value = p.identity_number||""; openModal('profileModal'); }
-async function saveProfileChanges() { const name=document.getElementById('editProfileName').value.trim(), phone=document.getElementById('editProfilePhone').value.trim(), idNum=document.getElementById('editProfileID').value.trim(); if(!name) return alert("שם חובה"); await sb.from('profiles').update({ full_name: name, phone: phone, identity_number: idNum }).eq('id', currentUser.id); window.currentProfile.full_name=name; window.currentProfile.phone=phone; window.currentProfile.identity_number=idNum; document.getElementById('userDisplayHome').innerHTML = `שלום, ${name} <span onclick="openEditProfile()" class="edit-icon">✏️</span>`; document.getElementById('userDisplay').innerHTML = `שלום, ${name} <span onclick="openEditProfile()" class="edit-profile-btn">✏️</span>`; closeModal('profileModal'); }
-async function deleteAccount() { if(confirm("למחוק?")) { await sb.rpc('delete_own_user'); logout(); } }
-async function saveOnboarding() { const name=document.getElementById('onboardName').value.trim(), phone=document.getElementById('onboardPhone').value.trim(), idNum=document.getElementById('onboardID').value.trim(); if(!name) return alert("שם חובה"); await sb.from('profiles').insert([{ id: currentUser.id, email: currentUser.email, full_name: name, phone: phone, identity_number: idNum, work_mode: 'solo' }]); location.reload(); }
+.tool-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--input-bg); }
+.task-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 15px; }
+.task-tab { flex: 1; padding: 10px; background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-muted); cursor: pointer; transition: 0.3s; }
+.task-tab.active { color: var(--primary); border-color: var(--primary); font-weight: bold; }
+.task-add-btn { width: 100%; background: var(--input-bg); border: 1px dashed var(--border); color: var(--primary); padding: 12px; border-radius: 12px; margin-bottom: 15px; font-weight: bold; transition: 0.2s; }
+.task-add-btn:hover { background: var(--primary); color: white; border-style: solid; }
+.task-input-area { display: none; background: rgba(255,255,255,0.03); padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border); }
+.task-input-area.open { display: block; }
+.task-item { display: flex; align-items: center; justify-content: space-between; padding: 15px; border-bottom: 1px solid var(--border); gap: 10px; background: var(--card-bg); transition: 0.2s; }
+.task-item:hover { background: var(--input-bg); }
+.task-left { display: flex; align-items: center; gap: 10px; flex: 1; text-align: right; }
+.task-right { display: flex; align-items: center; gap: 8px; }
+.task-checkbox { width: 20px; height: 20px; cursor: pointer; margin: 0; accent-color: var(--primary); }
+.task-title { font-weight: bold; font-size: 1rem; display: block; }
+.task-meta { font-size: 0.8em; color: var(--text-muted); display: flex; gap: 10px; align-items: center; margin-top: 3px; }
+.task-tag { font-size: 0.75rem; background: var(--input-bg); border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px; }
+.btn-icon { background: none; border: none; cursor: pointer; font-size: 1.2rem; padding: 5px; border-radius: 50%; transition: 0.2s; }
+.btn-play { color: var(--success); border: 1px solid var(--success); }
+.btn-play:hover { background: var(--success); color: black; }
+.btn-edit { color: var(--text-main); border: 1px solid var(--text-muted); }
+.btn-del { color: var(--danger); }
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+.modal-content { background: var(--card-bg); padding: 25px; border-radius: 20px; width: 95%; max-width: 900px; max-height: 90vh; overflow-y: auto; position: relative; border: 1px solid var(--border); }
+.close-modal { position: absolute; top: 15px; left: 15px; background: none; border: none; color: var(--text-muted); font-size: 1.5rem; cursor: pointer; }
+.btn-action { width: 100%; background: var(--primary); color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; margin-top: 10px; }
+.btn-delete-account-small { background: transparent; border: 1px solid var(--danger); color: var(--danger); padding: 8px 15px; font-size: 0.8rem; border-radius: 8px; margin-top: 25px; display: block; margin-right: auto; transition: 0.2s; cursor: pointer;}
+.btn-delete-account-small:hover { background: var(--danger); color: white; }
+.btn-delete-log { background: var(--danger); margin-top: 10px; color: white; }
+.tab-header { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 15px; }
+.tab-btn { flex: 1; background: none; border: none; padding: 12px; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; transition: 0.3s; font-weight: bold; }
+.tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+.tab-content { display: none; animation: fadeIn 0.3s; }
+.tab-content.active { display: block; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
+th, td { padding: 12px 8px; border-bottom: 1px solid var(--border); text-align: right; }
+th { color: var(--primary); white-space: nowrap; font-size: 0.8rem; background: rgba(255,255,255,0.02); }
+.row-inputs { display: flex; gap: 10px; }
+.filter-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 20px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; }
+.filter-group { flex: 1; min-width: 120px; }
+.filter-buttons { display: flex; gap: 5px; flex: 1.5; justify-content: flex-end; margin-top: 10px;}
+.btn-filter-date { background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 0 15px; border-radius: 8px; font-size: 0.8rem; height: 38px; cursor: pointer; }
+.btn-filter-date:hover { border-color: var(--primary); color: var(--primary); }
+.btn-filter-go { background: var(--primary); color: white; border:none; border-radius:8px; padding: 0 20px; height: 38px; font-weight: bold; cursor: pointer;}
+.btn-export-csv { background: var(--success); color: black; border:none; border-radius:8px; padding: 0 20px; height: 38px; font-weight: bold; display:flex; align-items:center; gap:5px; cursor: pointer;}
+.header-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border); font-size: 0.9rem; color: var(--text-muted); }
+.header-actions { display: flex; align-items: center; gap: 15px; }
+.theme-toggle { background: none; border: 1px solid var(--border); color: var(--text-main); border-radius: 50%; width: 32px; height: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.logout-btn { color: var(--danger); cursor: pointer; text-decoration: underline; font-weight: bold; font-size: 0.9rem; }
+.edit-profile-btn { cursor: pointer; margin-right: 5px; font-size: 1.1em; transition: 0.2s; }
+.edit-icon { cursor: pointer; font-size: 1.2em; transition: 0.2s; border: none; background: none; }
+.edit-icon:hover { transform: scale(1.2); }
+.timer { font-size: 3.5rem; font-family: monospace; margin: 10px 0 20px 0; letter-spacing: 2px; }
+.btn-back { background: transparent; border: none; color: var(--text-muted); font-size: 1.5rem; cursor: pointer; position: absolute; top: 20px; right: 20px; }
+.mode-selector { display: flex; gap: 15px; margin-bottom: 20px; justify-content: center; }
+.mode-card { border: 1px solid var(--border); padding: 15px; border-radius: 12px; cursor: pointer; width: 120px; text-align: center; opacity: 0.6; }
+.mode-card.selected { border-color: var(--primary); background: rgba(187, 134, 252, 0.1); opacity: 1; transform: scale(1.05); }
+.mode-icon { font-size: 2rem; display: block; margin-bottom: 5px; }
+@media (max-width: 600px) { .filter-row-inputs { grid-template-columns: 1fr 1fr; } .filter-row-buttons { flex-wrap: wrap; } }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
