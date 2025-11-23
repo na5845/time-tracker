@@ -1,4 +1,4 @@
-:root {
+root {
     --bg-color: #121212; --card-bg: #1e1e1e; --text-main: #e0e0e0; --text-muted: #a0a0a0;
     --input-bg: #2c2c2c; --border: #333; --primary: #bb86fc; --danger: #cf6679; --success: #03dac6;
 }
@@ -106,3 +106,4 @@ th { color: var(--primary); white-space: nowrap; font-size: 0.8rem; background: 
 .mode-icon { font-size: 2rem; display: block; margin-bottom: 5px; }
 @media (max-width: 600px) { .filter-row-inputs { grid-template-columns: 1fr 1fr; } .filter-row-buttons { flex-wrap: wrap; } }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+
